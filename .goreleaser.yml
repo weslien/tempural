@@ -1,0 +1,64 @@
+# .goreleaser.yml
+version: 2
+project_name: tempural
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    main: ./
+    ldflags:
+      - -s -w
+      - -X github.com/weslien/tempural/pkg/utils.Version={{ .Version }}
+      - -X github.com/weslien/tempural/pkg/utils.GitCommit={{ .ShortCommit }}
+      - -X github.com/weslien/tempural/pkg/utils.BuildDate={{ .Date }}
+    binary: tempural
+
+archives:
+  - format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: "{{ .ProjectName }}_{{ .Version }}_checksums.txt"
+
+snapshot:
+  name_template: "{{ .Tag }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+
+brews:
+  - name: tempural
+    repository:
+      owner: weslien
+      name: homebrew-tap
+    commit_author:
+      name: Gustav Weslien
+      email: gustav.weslien@gmail.com
+    description: "CLI for temporal stuff"
+    homepage: "https://github.com/weslien/tempural"
+    license: "MIT"
+    install: |
+      bin.install "tempural"
+    test: |
+      system "#{bin}/tempural", "-version"
