@@ -116,9 +116,22 @@ Required flags:
 
 Optional flags:
 - `--input, -i`: JSON input for the workflow (default: "{}")
+- `--workflow-id, -w, --id`: Explicit ID to use for the workflow
 - `--interactive, --prompt`: Build workflow input interactively with prompts
 
-If no workflow ID is provided, a random one will be generated.
+If no workflow ID is provided (either via the command-specific `--workflow-id` flag or the global `-w` flag), a random one will be generated.
+
+Examples:
+```bash
+# Start with auto-generated workflow ID
+tempural start -t "ProcessOrder" -i '{"orderId": "12345"}'
+
+# Start with specific workflow ID
+tempural start -t "ProcessOrder" -i '{"orderId": "12345"}' --workflow-id "order-12345"
+
+# Using the global workflow ID flag
+tempural -w "order-12345" start -t "ProcessOrder" -i '{"orderId": "12345"}'
+```
 
 #### Interactive Mode
 
@@ -262,7 +275,11 @@ tempural list
 
 Start a new workflow:
 ```bash
+# Auto-generated workflow ID
 tempural start -t "ProcessOrder" -i '{"orderId": "12345"}'
+
+# Specific workflow ID
+tempural start -t "ProcessOrder" -i '{"orderId": "12345"}' --workflow-id "order-12345"
 ```
 
 Start a workflow with interactive input:

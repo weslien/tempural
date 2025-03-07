@@ -93,6 +93,12 @@ func NewTemporalCLI() *cli.App {
 						Usage:   "JSON input for the workflow",
 						Value:   "{}",
 					},
+					&cli.StringFlag{
+						Name:    "workflow-id",
+						Aliases: []string{"w", "id"},
+						Usage:   "Specific ID to use for the workflow (overrides global workflow-id flag)",
+						Value:   "",
+					},
 					&cli.BoolFlag{
 						Name:    "interactive",
 						Aliases: []string{"prompt"},
@@ -258,11 +264,19 @@ func startWorkflow(c *cli.Context, config TemporalConfig) error {
 	defer cancel()
 
 	workflowType := c.String("workflow-type")
-	workflowID := config.WorkflowID
 
-	// Generate a random workflow ID if not provided
+	// First check for a command-specific workflow ID flag
+	workflowID := c.String("workflow-id")
+
+	// If not provided, fall back to the global flag
+	if workflowID == "" {
+		workflowID = config.WorkflowID
+	}
+
+	// Generate a random workflow ID if still not provided
 	if workflowID == "" {
 		workflowID = fmt.Sprintf("workflow-%d", time.Now().Unix())
+		fmt.Printf("No workflow ID provided, using auto-generated ID: %s\n", workflowID)
 	}
 
 	var input string
