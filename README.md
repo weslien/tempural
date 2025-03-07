@@ -11,8 +11,33 @@ Tempural provides a simple command-line interface to interact with Temporal work
 - Get detailed information about a workflow
 - Signal existing workflows
 - Query workflow state
+- Infer parameter structure for workflows
 
 ## Installation
+
+### Using Homebrew (macOS/Linux)
+
+The easiest way to install tempural is via Homebrew:
+
+```bash
+# Add the tap repository
+brew tap weslien/tap
+
+# Install tempural
+brew install tempural
+```
+
+Benefits of using Homebrew:
+- Automatic dependency management
+- Easy updates with `brew upgrade`
+- No need to manually build from source
+- Seamless integration with your system
+
+To update to the latest version:
+
+```bash
+brew upgrade tempural
+```
 
 ### Using Go Install
 
@@ -24,10 +49,12 @@ go install github.com/weslien/tempural@latest
 
 ### Prerequisites
 
-- Go 1.21 or higher
+- Go 1.21 or higher (only needed for Go installation method)
 - Access to a Temporal server
 
 ### Building from source
+
+Note: For most users, installing via Homebrew or Go Install is recommended instead of building from source.
 
 ```bash
 # Clone the repository
@@ -89,8 +116,25 @@ Required flags:
 
 Optional flags:
 - `--input, -i`: JSON input for the workflow (default: "{}")
+- `--interactive, --prompt`: Build workflow input interactively with prompts
 
 If no workflow ID is provided, a random one will be generated.
+
+#### Interactive Mode
+
+The interactive mode provides a guided experience for building workflow input:
+
+```bash
+tempural start -t "YourWorkflowType" --interactive
+```
+
+When using interactive mode:
+1. The CLI first tries to infer the expected parameter structure from existing workflows of the same type
+2. If it finds a matching schema, it guides you through filling in each field with the correct type
+3. If no schema is found, it provides a generic input builder that can create any JSON structure
+4. After building the input, it shows you the final JSON and asks for confirmation before starting the workflow
+
+This is especially useful when you're not familiar with the exact structure of parameters a workflow expects.
 
 ### Describe a Workflow
 
@@ -150,6 +194,65 @@ Required flags:
 Optional flags:
 - `--args, -a`: JSON arguments for the query (default: "{}")
 
+### Infer Workflow Parameters
+
+Discover the parameter structure a workflow type expects by examining past executions:
+
+```bash
+tempural infer-params --workflow-type "YourWorkflowType"
+```
+
+Required flags:
+- `--workflow-type, -t`: Type of workflow to infer parameters for
+
+Optional flags:
+- `--limit, -l`: Maximum number of workflows to examine (default: 3)
+- `--json-schema, -j`: Output as JSONSchema format instead of examples
+- `--raw, -r`: Output raw schema without pretty-printing (useful for piping to files)
+
+This command:
+1. Finds recent executions of the specified workflow type
+2. Examines their input parameters
+3. Shows example parameter structures that can be used as templates
+
+With the `--json-schema` flag, it generates a formal JSONSchema representation that can be used for validation, documentation, or code generation.
+
+Example JSONSchema output:
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "title": "ProcessOrder Parameters",
+  "description": "Parameter schema for ProcessOrder workflow",
+  "properties": {
+    "orderId": {
+      "type": "string"
+    },
+    "customerId": {
+      "type": "string"
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "productId": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "number"
+          }
+        },
+        "required": ["productId", "quantity"]
+      }
+    }
+  },
+  "required": ["orderId", "customerId", "items"]
+}
+```
+
+This is particularly useful when you're unsure about the structure of parameters a workflow expects.
+
 ## Examples
 
 List all running workflows:
@@ -160,6 +263,11 @@ tempural list
 Start a new workflow:
 ```bash
 tempural start -t "ProcessOrder" -i '{"orderId": "12345"}'
+```
+
+Start a workflow with interactive input:
+```bash
+tempural start -t "ProcessOrder" --interactive
 ```
 
 Get detailed information about a workflow:
@@ -175,6 +283,20 @@ tempural signal -w "workflow-1234567890" -s "CancelOrder" -i '{"reason": "Custom
 Query a workflow:
 ```bash
 tempural query -w "workflow-1234567890" -q "GetOrderStatus"
+```
+
+Infer parameters for a workflow type:
+```bash
+tempural infer-params -t "ProcessOrder"
+```
+
+Generate JSONSchema for a workflow type:
+```bash
+# Output JSONSchema to console with pretty formatting
+tempural infer-params -t "ProcessOrder" --json-schema
+
+# Save JSONSchema to a file
+tempural infer-params -t "ProcessOrder" --json-schema --raw > process-order-schema.json
 ```
 
 ## License
