@@ -84,6 +84,7 @@ These flags can be used with any command:
 --namespace, -n   Temporal namespace (default: "default")
 --task-queue, -q  Task queue for workflow execution (default: "default")
 --workflow-id, -w Workflow ID for operations that require one
+--debug, -d       Enable debug mode with verbose logging (default: false)
 ```
 
 You can also set these values using environment variables:
@@ -94,6 +95,49 @@ TEMPORAL_NAMESPACE
 TEMPORAL_TASK_QUEUE
 TEMPORAL_WORKFLOW_ID
 ```
+
+### Debugging and Profiling
+
+Tempural includes several debugging and profiling capabilities:
+
+```
+--debug, -d       Enable debug mode with verbose logging
+--cpu-profile     Write CPU profile to specified file
+--mem-profile     Write memory profile to specified file
+--pprof           Enable runtime profiling server (default: false)
+--pprof-port      Port for runtime profiling server (default: 6060)
+```
+
+Examples:
+
+```bash
+# Enable debug logging
+tempural --debug list
+
+# Capture CPU profile to analyze performance
+tempural --cpu-profile=cpu.prof start -t "ProcessOrder" -i '{"orderId": "12345"}'
+
+# Capture memory profile to analyze memory usage
+tempural --mem-profile=mem.prof describe -w "workflow-1234"
+
+# Start a profiling server for real-time analysis
+tempural --pprof list
+```
+
+After capturing profiles, you can analyze them using Go's pprof tool:
+
+```bash
+# Analyze CPU profile
+go tool pprof cpu.prof
+
+# Analyze memory profile
+go tool pprof mem.prof
+
+# Generate a graph visualization (requires graphviz)
+go tool pprof -png -output=cpu.png cpu.prof
+```
+
+When using `--pprof`, you can access the pprof web interface at http://localhost:6060/debug/pprof/ to analyze various aspects of the running application.
 
 ### List Workflows
 
@@ -115,11 +159,21 @@ Required flags:
 - `--workflow-type, -t`: Type of workflow to start
 
 Optional flags:
-- `--input, -i`: JSON input for the workflow (default: "{}")
+- `--input, -i`: JSON input for the workflow (default: "{}"). Use "-" to read from stdin
 - `--workflow-id, -w, --id`: Explicit ID to use for the workflow
 - `--interactive, --prompt`: Build workflow input interactively with prompts
 
 If no workflow ID is provided (either via the command-specific `--workflow-id` flag or the global `-w` flag), a random one will be generated.
+
+You can pipe JSON data or read from a file:
+
+```bash
+# Pipe JSON data 
+echo '{"orderId": "12345"}' | tempural start -t "ProcessOrder" -i -
+
+# Read from a file
+tempural start -t "ProcessOrder" -i - < order-data.json
+```
 
 Examples:
 ```bash
@@ -190,7 +244,17 @@ Required flags:
 - `--workflow-id, -w`: ID of the workflow to signal (can be provided globally)
 
 Optional flags:
-- `--input, -i`: JSON input for the signal (default: "{}")
+- `--input, -i`: JSON input for the signal (default: "{}"). Use "-" to read from stdin
+
+You can pipe signal data or read from a file:
+
+```bash
+# Pipe JSON data 
+echo '{"cancel": true}' | tempural signal -w "workflow-1234" -s "CancelOrder" -i -
+
+# Read from a file
+tempural signal -w "workflow-1234" -s "UpdateOrder" -i - < updated-order.json
+```
 
 ### Query a Workflow
 
@@ -205,7 +269,17 @@ Required flags:
 - `--workflow-id, -w`: ID of the workflow to query (can be provided globally)
 
 Optional flags:
-- `--args, -a`: JSON arguments for the query (default: "{}")
+- `--args, -a`: JSON arguments for the query (default: "{}"). Use "-" to read from stdin
+
+You can pipe query arguments or read from a file:
+
+```bash
+# Pipe JSON data 
+echo '{"includeDetails": true}' | tempural query -w "workflow-1234" -q "GetOrderStatus" -a -
+
+# Read from a file
+tempural query -w "workflow-1234" -q "GetOrderItems" -a - < query-params.json
+```
 
 ### Infer Workflow Parameters
 
@@ -280,6 +354,9 @@ tempural start -t "ProcessOrder" -i '{"orderId": "12345"}'
 
 # Specific workflow ID
 tempural start -t "ProcessOrder" -i '{"orderId": "12345"}' --workflow-id "order-12345"
+
+# Read input from a file
+tempural start -t "ProcessOrder" -i - < order.json
 ```
 
 Start a workflow with interactive input:
@@ -294,12 +371,20 @@ tempural describe -w "workflow-1234567890"
 
 Signal a workflow:
 ```bash
+# Direct input
 tempural signal -w "workflow-1234567890" -s "CancelOrder" -i '{"reason": "Customer request"}'
+
+# Read signal input from a file
+cat signal-data.json | tempural signal -w "workflow-1234567890" -s "UpdateOrder" -i -
 ```
 
 Query a workflow:
 ```bash
+# Direct input
 tempural query -w "workflow-1234567890" -q "GetOrderStatus"
+
+# With query arguments from stdin
+echo '{"detailed": true}' | tempural query -w "workflow-1234567890" -q "GetOrderStatus" -a -
 ```
 
 Infer parameters for a workflow type:

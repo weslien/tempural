@@ -19,10 +19,15 @@ import (
 
 // TemporalConfig holds configuration for connecting to Temporal
 type TemporalConfig struct {
-	Address    string
-	Namespace  string
-	TaskQueue  string
-	WorkflowID string
+	Address         string
+	Namespace       string
+	TaskQueue       string
+	WorkflowID      string
+	Debug           bool
+	CPUProfile      string
+	MemProfile      string
+	EnableProfiling bool
+	ProfilePort     int
 }
 
 // NewTemporalCLI creates a new CLI application for interacting with Temporal
@@ -34,6 +39,7 @@ func NewTemporalCLI() *cli.App {
 		Usage:                  "A CLI tool for interacting with Temporal server",
 		UseShortOptionHandling: true,
 		EnableBashCompletion:   true,
+		AllowExtFlags:          true, // Allow flags after commands
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:        "address",
@@ -66,6 +72,37 @@ func NewTemporalCLI() *cli.App {
 				Usage:       "Workflow ID for operations that require one",
 				Destination: &config.WorkflowID,
 				EnvVars:     []string{"TEMPORAL_WORKFLOW_ID"},
+			},
+			&cli.BoolFlag{
+				Name:        "debug",
+				Aliases:     []string{"d"},
+				Usage:       "Enable debug mode with verbose logging",
+				Destination: &config.Debug,
+				Value:       false,
+			},
+			&cli.StringFlag{
+				Name:        "cpu-profile",
+				Usage:       "Write CPU profile to file",
+				Destination: &config.CPUProfile,
+				Value:       "",
+			},
+			&cli.StringFlag{
+				Name:        "mem-profile",
+				Usage:       "Write memory profile to file",
+				Destination: &config.MemProfile,
+				Value:       "",
+			},
+			&cli.BoolFlag{
+				Name:        "pprof",
+				Usage:       "Enable runtime profiling server",
+				Destination: &config.EnableProfiling,
+				Value:       false,
+			},
+			&cli.IntFlag{
+				Name:        "pprof-port",
+				Usage:       "Port for runtime profiling server",
+				Destination: &config.ProfilePort,
+				Value:       6060,
 			},
 		},
 		Commands: []*cli.Command{
@@ -201,6 +238,10 @@ func NewTemporalCLI() *cli.App {
 				},
 			},
 		},
+		Before: func(c *cli.Context) error {
+			// Setup profiling before any command runs
+			return SetupProfiling(config)
+		},
 	}
 
 	return app
@@ -317,8 +358,31 @@ func startWorkflow(c *cli.Context, config TemporalConfig) error {
 			return fmt.Errorf("workflow start canceled by user")
 		}
 	} else {
-		// Use the input provided by the user
-		input = c.String("input")
+		// Get input from flag value
+		inputFlag := c.String("input")
+
+		// Check if input should be read from stdin
+		if inputFlag == "-" {
+			fmt.Println("Reading input from stdin...")
+			scanner := bufio.NewScanner(os.Stdin)
+			var inputBuilder strings.Builder
+			for scanner.Scan() {
+				inputBuilder.WriteString(scanner.Text())
+			}
+			if err := scanner.Err(); err != nil {
+				return fmt.Errorf("error reading from stdin: %w", err)
+			}
+			input = inputBuilder.String()
+
+			// If input is empty, provide a warning
+			if strings.TrimSpace(input) == "" {
+				fmt.Println("Warning: Empty input received from stdin")
+				input = "{}" // Fallback to empty JSON object
+			}
+		} else {
+			// Use the input provided in the flag
+			input = inputFlag
+		}
 	}
 
 	// Start the workflow
@@ -811,7 +875,31 @@ func signalWorkflow(c *cli.Context, config TemporalConfig) error {
 	defer cancel()
 
 	signalName := c.String("signal-name")
-	input := c.String("input")
+	inputFlag := c.String("input")
+	var input string
+
+	// Check if input should be read from stdin
+	if inputFlag == "-" {
+		fmt.Println("Reading signal input from stdin...")
+		scanner := bufio.NewScanner(os.Stdin)
+		var inputBuilder strings.Builder
+		for scanner.Scan() {
+			inputBuilder.WriteString(scanner.Text())
+		}
+		if err := scanner.Err(); err != nil {
+			return fmt.Errorf("error reading from stdin: %w", err)
+		}
+		input = inputBuilder.String()
+
+		// If input is empty, provide a warning
+		if strings.TrimSpace(input) == "" {
+			fmt.Println("Warning: Empty input received from stdin")
+			input = "{}" // Fallback to empty JSON object
+		}
+	} else {
+		// Use the input provided in the flag
+		input = inputFlag
+	}
 
 	// Signal the workflow
 	err = temporalClient.SignalWorkflow(ctx, config.WorkflowID, "", signalName, []byte(input))
@@ -840,7 +928,31 @@ func queryWorkflow(c *cli.Context, config TemporalConfig) error {
 	defer cancel()
 
 	queryType := c.String("query-type")
-	args := c.String("args")
+	argsFlag := c.String("args")
+	var args string
+
+	// Check if args should be read from stdin
+	if argsFlag == "-" {
+		fmt.Println("Reading query args from stdin...")
+		scanner := bufio.NewScanner(os.Stdin)
+		var argsBuilder strings.Builder
+		for scanner.Scan() {
+			argsBuilder.WriteString(scanner.Text())
+		}
+		if err := scanner.Err(); err != nil {
+			return fmt.Errorf("error reading from stdin: %w", err)
+		}
+		args = argsBuilder.String()
+
+		// If args is empty, provide a warning
+		if strings.TrimSpace(args) == "" {
+			fmt.Println("Warning: Empty args received from stdin")
+			args = "{}" // Fallback to empty JSON object
+		}
+	} else {
+		// Use the args provided in the flag
+		args = argsFlag
+	}
 
 	// Query the workflow
 	response, err := temporalClient.QueryWorkflow(ctx, config.WorkflowID, "", queryType, []byte(args))
